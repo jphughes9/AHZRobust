@@ -269,13 +269,13 @@ AHZ.glmerMod = function(obj,L,cluster,type="classic",kadjust=FALSE,Fadjust=FALSE
           robust$W[[i]]%*%term[grp,,drop=FALSE]
       }
     }
-    sum=0
+    covd=0
     for (i in 1:info$m){
       for (j in 1:info$m){
-        term = B[[i]] %*% bigV %*% t(B[[j]])
-        sum = sum + 2*term^2
+        term = as.numeric(B[[i]] %*% bigV %*% t(B[[j]]))
+        covd = covd + 2*term^2
       }}
-    as.numeric(2/sum)
+    as.numeric(2/covd)
   }
   #
   AHZqdf <- function(L,info,M,robust,Fadjust){
@@ -298,18 +298,16 @@ AHZ.glmerMod = function(obj,L,cluster,type="classic",kadjust=FALSE,Fadjust=FALSE
           robust$W[[i]]%*%term2[grp,,drop=FALSE]
       }
     }
-    sum=0
+    covd=matrix(0,q,q)
     for (i in 1:info$m){
       for (j in 1:info$m){
         term = B[[i]] %*% bigV %*% t(B[[j]])
-        dsum = 0
         for (s in 1:q){
           for (t in 1:q) { 
-            dsum = dsum + term[s,t]*term[t,s] + term[s,s]*term[t,t]
+            covd[s,t] = covd[s,t] + term[s,t]*term[t,s] + term[s,s]*term[t,t]
           }}
-        sum = sum + dsum
       }}
-    as.numeric(q*(q+1)/sum)
+    as.numeric(q*(q+1)/sum(covd))
   }
     #######################
   ## Function starts here
@@ -372,7 +370,7 @@ AHZ.glmerMod = function(obj,L,cluster,type="classic",kadjust=FALSE,Fadjust=FALSE
     z = L%*%beta
     Q = t(z)%*%solve(var_Lbeta)%*%z
     eta <- max(q,AHZqdf(L,info,XtVX,robust,Fadjust))
-    Fvalue <- ifelse(kadjust,as.numeric(Q*(eta-q+1)/(eta*q)),as.numeric(Q))
+    Fvalue <- ifelse(kadjust,as.numeric(Q*(eta-q+1)/(eta*q)),as.numeric(Q/q))
     pvalue <- pf(q=Fvalue, df1=q, df2=eta-q+1, lower.tail=FALSE)
     list('F value'=Fvalue, ndf=q, ddf=eta-q+1, pvalue=pvalue,robustVar = robust$var)
   }
