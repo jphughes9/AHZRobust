@@ -382,7 +382,6 @@ AHZ.glmerMod = function(obj,L,cluster,type="classic",kadjust=FALSE,Fadjust=FALSE
 #  if (typeOpts$type1 %in% c("FG","MBN")) warning("Adjustment matrix A set to identity for df calculation")
   ####### Set things up ########
   info = extract_info(obj,cluster,typeOpts)
-  if (sum(diff(info$cluster)!=0)>=info$m) stop("Data must be grouped by cluster")
   beta=matrix(lme4::fixef(obj),ncol=1)
   eta = stats::predict(obj,type="link")
   ginv_eta = stats::predict(obj,type="response")
