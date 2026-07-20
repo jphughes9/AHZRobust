@@ -281,35 +281,70 @@ AHZ.glmerMod = function(obj,L,cluster,type="classic",kadjust=FALSE,Fadjust=FALSE
   AHZqdf <- function(L,info,M,robust,Fadjust){
     q = nrow(L)
     B = list()
-    bigW = .bdiag(robust$W)
-    bigV = .bdiag(robust$V)
+    XW = list()
+    grp = list()
+    ng=rep(0,info$m)
     term1 = sqrtm_inv(L%*%M%*%t(L))%*%L%*%M
-    term2 = (diag(info$n) - info$X%*%M%*%t(info$X)%*%bigW)
     i=0
     for (g in info$clusternames){
       i=i+1
-      grp = (info$cluster == g & info$nden>0)
-      ng = sum(grp)
+      grp[[i]] = (info$cluster == g & info$nden>0)
+      XW[[i]] = t(info$X[grp[[i]],])%*%robust$W[[i]]
+    }
+    i=0
+    for (g in info$clusternames){
+      i=i+1
+      ng[i] = sum(grp[[i]])
+      XgM = info$X[grp[[i]],]%*%M
+      temp = lapply(XW,function(x) {-XgM%*%x})
+      temp[[i]] = temp[[i]]+diag(ng[i])
+      temp = lapply(temp,as.matrix)
+      term2 = do.call(cbind,temp)
       if (Fadjust) {
-        B[[i]] = term1%*%t(info$X[grp,,drop=FALSE])%*%
-        robust$W[[i]]%*%robust$A[[i]]%*%term2[grp,,drop=FALSE]
+        B[[i]] = term1%*%t(info$X[grp[[i]],,drop=FALSE])%*%
+                 robust$W[[i]]%*%robust$A[[i]]%*%term2
       } else {
-        B[[i]] = term1%*%t(info$X[grp,,drop=FALSE])%*%
-          robust$W[[i]]%*%term2[grp,,drop=FALSE]
+        B[[i]] = term1%*%t(info$X[grp[[i]],,drop=FALSE])%*%
+                 robust$W[[i]]%*%term2
       }
     }
+    bigV = .bdiag(robust$V)
     covd=matrix(0,q,q)
-    for (i in 1:info$m){
-      for (j in 1:info$m){
+##############################
+# the code below effectively executes the following but takes advantage of 
+# the symmetry of V (and bigV) to be a bit more efficient
+#    for (i in 1:info$m){
+#      for (j in 1:info$m){
+#        term = B[[i]] %*% bigV %*% t(B[[j]])
+#        for (s in 1:q){
+#          for (t in 1:q) { 
+#            covd[s,t] = covd[s,t] + term[s,t]*term[t,s] + term[s,s]*term[t,t]
+#          }}
+#      }}
+#######    
+    for (i in 1:(info$m-1)){
+     term = B[[i]] %*% bigV %*% t(B[[i]])
+      for (s in 1:q){
+        for (t in 1:q) { 
+          covd[s,t] = covd[s,t] + term[s,t]*term[t,s] + term[s,s]*term[t,t]
+        }}
+      for (j in (i+1):info$m){
         term = B[[i]] %*% bigV %*% t(B[[j]])
         for (s in 1:q){
           for (t in 1:q) { 
-            covd[s,t] = covd[s,t] + term[s,t]*term[t,s] + term[s,s]*term[t,t]
+            covd[s,t] = covd[s,t] + 2*(term[s,t]*term[t,s] + term[s,s]*term[t,t])
           }}
       }}
+    term = B[[info$m]] %*% bigV %*% t(B[[info$m]])
+    for (s in 1:q){
+      for (t in 1:q) { 
+        covd[s,t] = covd[s,t] + term[s,t]*term[t,s] + term[s,s]*term[t,t]
+      }}
+#############################
     as.numeric(q*(q+1)/sum(covd))
   }
-    #######################
+  
+  #######################
   ## Function starts here
   #######################
   ####  Checks ####
@@ -347,6 +382,7 @@ AHZ.glmerMod = function(obj,L,cluster,type="classic",kadjust=FALSE,Fadjust=FALSE
 #  if (typeOpts$type1 %in% c("FG","MBN")) warning("Adjustment matrix A set to identity for df calculation")
   ####### Set things up ########
   info = extract_info(obj,cluster,typeOpts)
+  if (sum(diff(info$cluster)!=0)>=info$m) stop("Data must be grouped by cluster")
   beta=matrix(lme4::fixef(obj),ncol=1)
   eta = stats::predict(obj,type="link")
   ginv_eta = stats::predict(obj,type="response")
